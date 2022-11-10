@@ -1,6 +1,30 @@
 """
 
-# raylibExtras * Utilities and Shared Components for raypyc
+raylibExtras * Utilities and Shared Components for raypyc
+
+FPCamera * Simple First person camera (C version)
+
+LICENSE: MIT
+
+Copyright (c) 2020 Jeffery Myers
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 """
 
@@ -10,7 +34,7 @@ import enum
 import raypyc
 
 
-class CameraControls(enum.IntEnum):
+class rlFirstPersonCameraControls(enum.IntEnum):
     MOVE_FRONT = 0
     MOVE_BACK = enum.auto()
     MOVE_RIGHT = enum.auto()
@@ -28,7 +52,7 @@ class CameraControls(enum.IntEnum):
 class FirstPersonCamera(ctypes.Structure):
     _fields_ = [
         # keys used to control the camera
-        ('ControlsKeys', ctypes.c_int * CameraControls.LAST_CONTROL),
+        ('ControlsKeys', ctypes.c_int * rlFirstPersonCameraControls.LAST_CONTROL),
 
         # the speed in units/second to move
         # X = sidestep
@@ -152,5 +176,79 @@ def init_first_person_camera(camera: ctypes.POINTER(FirstPersonCamera), fov_y: c
     camera.contents.NearPlane = 0.01
     camera.contents.FarPlane = 1000.0
 
-    """resize_firstPersonCamera_view(camera)
-    use_firstPersonCamera_mouse(camera, camera.contents.UseMouse)"""
+    rl_first_person_camera_resize_view(camera)
+    rl_first_person_camera_use_mouse(camera, camera.contents.UseMouse)
+
+
+def rl_first_person_camera_use_mouse(camera: ctypes.POINTER(FirstPersonCamera), use_mouse: ctypes.c_bool) -> None:
+    """turn the use of mouse-look on/off, also updates the cursor visibility"""
+    if not bool(camera):  # NULL pointers have a False boolean value
+        return
+
+    camera.contents.UseMouse = use_mouse
+
+    if use_mouse and raypyc.is_window_focused():
+        raypyc.disable_cursor()
+    elif (not use_mouse) and raypyc.is_window_focused():
+        raypyc.enable_cursor()
+
+
+def rl_first_person_camera_resize_view(camera: ctypes.POINTER(FirstPersonCamera)) -> None:
+    """called to update field of view in X when window resizes"""
+
+    if not bool(camera):  # NULL pointers have a False boolean value
+        return
+
+    width: float = float(raypyc.get_screen_width())
+    height: float = float(raypyc.get_screen_height())
+
+    camera.contents.FOV.y = camera.contents.ViewCamera.fovy
+
+    if height != 0:
+        camera.contents.FOV.x = camera.contents.FOV.y * (width / height)
+
+
+def rl_first_person_camera_get_position(camera: ctypes.POINTER(FirstPersonCamera)) -> raypyc.Vector3:
+    """Get the camera's position in world (or game) space"""
+    return camera.contents.CameraPosition
+
+
+def rl_first_person_camera_set_position(camera: ctypes.POINTER(FirstPersonCamera), pos: raypyc.Vector3) -> None:
+    """Get the camera's position in world (or game) space"""
+    camera.contents.CameraPosition = pos
+    forward: raypyc.Vector3 = raypyc.vector3_subtract(camera.contents.ViewCamera.target, camera.contents.ViewCamera.position)
+    camera.contents.ViewCamera.position = camera.contents.CameraPosition
+    camera.contents.ViewCamera.target = raypyc.vector3_add(camera.contents.CameraPosition, forward)
+
+
+def rl_first_person_camera_get_view_ray(camera: ctypes.POINTER(FirstPersonCamera)) -> raypyc.Ray:
+    """returns the ray from the camera through the center of the view"""
+    return raypyc.Ray(camera.ViewCamera.CameraPosition, camera.ViewCamera.Forward)
+
+
+def _get_speed_for_axis(camera: ctypes.POINTER(FirstPersonCamera), axis: rlFirstPersonCameraControls, speed: ctypes.c_float) -> ctypes.c_float:
+    if not bool(camera):  # NULL pointers have a False boolean value
+        return
+
+    key: int = camera.contents.ControlsKeys[axis]
+
+    if key == -1:
+        return 0
+
+    factor = 1.0
+    if raypyc.is_key_down(camera.contents.ControlsKeys[rlFirstPersonCameraControls.SPRINT]):
+        factor = 2
+
+    if raypyc.is_key_down(camera.contents.ControlsKeys[axis]):
+        return speed * raypyc.get_frame_time() * factor
+
+    return 0.0
+
+
+"""
+# for texting
+raypyc.init_window(60, 60, b"fdsfsdf")
+ff = FirstPersonCamera()
+init_first_person_camera(ctypes.pointer(ff), 60.0, raypyc.Vector3(0, 0, 0))
+print(_get_speed_for_axis(ctypes.pointer(ff), rlFirstPersonCameraControls.SPRINT, 3.0))
+raypyc.close_window()"""
