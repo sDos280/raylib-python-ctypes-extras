@@ -34,6 +34,8 @@ import math
 
 import raypyc
 
+RL_CULL_DISTANCE_NEAR: float = 0.01  # Default projection matrix near cull distance  (currently raypyc don't wrap config.h)
+
 
 class rlFirstPersonCameraControls(enum.IntEnum):
     MOVE_FRONT = 0
@@ -128,7 +130,7 @@ class FirstPersonCamera(ctypes.Structure):
     ]
 
 
-def init_first_person_camera(camera: ctypes.POINTER(FirstPersonCamera), fov_y: ctypes.c_float, position: raypyc.Vector3) -> None:
+def rl_first_person_camera_init(camera: ctypes.POINTER(FirstPersonCamera), fov_y: ctypes.c_float, position: raypyc.Vector3) -> None:
     """called to initialize a camera to default values"""
     if not bool(camera):  # NULL pointers have a False boolean value
         return
@@ -312,7 +314,8 @@ def rl_first_person_camera_update(camera: ctypes.POINTER(FirstPersonCamera)) -> 
     eye_offset: float = camera.contents.PlayerEyesPosition
 
     if camera.contents.ViewBobbleFreq > 0:
-        swingDelta: float = float(max(math.fabs(direction[rlFirstPersonCameraControls.MOVE_FRONT] - direction[rlFirstPersonCameraControls.MOVE_BACK]), math.fabs(direction[rlFirstPersonCameraControls.MOVE_RIGHT] - direction[rlFirstPersonCameraControls.MOVE_LEFT])))
+        swingDelta: float = float(max(math.fabs(direction[rlFirstPersonCameraControls.MOVE_FRONT] - direction[rlFirstPersonCameraControls.MOVE_BACK]),
+                                      math.fabs(direction[rlFirstPersonCameraControls.MOVE_RIGHT] - direction[rlFirstPersonCameraControls.MOVE_LEFT])))
 
         camera.contents.CurrentBobble += swingDelta * camera.contents.ViewBobbleFreq
 
@@ -329,11 +332,48 @@ def rl_first_person_camera_update(camera: ctypes.POINTER(FirstPersonCamera)) -> 
         camera.contents.ViewCamera.up.z = 0
 
 
+def _setup_camera(camera: ctypes.POINTER(FirstPersonCamera), aspect: ctypes.c_float) -> None:
+    raypyc.rl_draw_render_batch_active()  # Draw Buffers (Only OpenGL 3+ and ES2)
+    raypyc.rl_matrix_mode(raypyc.RL_PROJECTION)  # Switch to projection matrix
+    raypyc.rl_push_matrix()  # Save previous matrix, which contains the settings for the 2d ortho projection
+    raypyc.rl_load_identity()  # Reset current matrix (projection)
 
-# for texting
-raypyc.init_window(60, 60, b"fdsfsdf")
-ff = FirstPersonCamera()
-init_first_person_camera(ctypes.pointer(ff), 60.0, raypyc.Vector3(0, 0, 0))
-print(_get_speed_for_axis(ctypes.pointer(ff), rlFirstPersonCameraControls.SPRINT, 3.0))
-rl_first_person_camera_update(ctypes.pointer(ff))
-raypyc.close_window()
+    if camera.contents.ViewCamera.projection == raypyc.CameraProjection.CAMERA_PERSPECTIVE:
+
+        # Setup perspective projection
+        top: float = RL_CULL_DISTANCE_NEAR * math.tan(camera.contents.ViewCamera.fovy * 0.5 * raypyc.DEG2RAD)
+        right: float = top * aspect
+
+        raypyc.rl_frustum(-right, right, -top, top, camera.contents.NearPlane, camera.contents.FarPlane)
+
+    elif camera.contents.ViewCamera.projection == raypyc.CAMERA_ORTHOGRAPHIC:
+        # Setup orthographic projection
+        top: float = camera.contents.ViewCamera.fovy / 2.0
+        right: float = top * aspect
+
+        raypyc.rl_ortho(-right, right, -top, top, camera.contents.NearPlane, camera.contents.FarPlane)
+
+    # NOTE: zNear and zFar values are important when computing depth buffer values
+
+    raypyc.rl_matrix_mode(raypyc.RL_MODELVIEW)  # Switch back to model-view matrix
+    raypyc.rl_load_identity()  # Reset current matrix (model-view)
+
+    # Setup Camera view
+    matView: raypyc.Matrix = raypyc.matrix_look_at(camera.contents.ViewCamera.position, camera.contents.ViewCamera.target, camera.contents.ViewCamera.up)
+
+    raypyc.rl_mult_matrixf(raypyc.matrix_to_float_v(matView).v)  # Multiply model-view matrix by view matrix (camera)
+
+    raypyc.rl_enable_depth_test()  # Enable DEPTH_TEST for 3D
+
+
+def rl_first_person_camera_begin_mode_3d(camera: ctypes.POINTER(FirstPersonCamera)) -> None:
+    """start drawing using the camera, with near/far plane support"""
+    if not bool(camera):  # NULL pointers have a False boolean value
+        return
+
+    aspect: float = float(raypyc.get_screen_width()) / float(raypyc.get_screen_height())
+    _setup_camera(camera, aspect)
+
+def rl_first_person_camera_end_mode_3d() -> None:
+    """end drawing with the camera"""
+    raypyc.end_mode_3d()
