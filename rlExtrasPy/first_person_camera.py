@@ -30,6 +30,7 @@ SOFTWARE.
 
 import ctypes
 import enum
+import math
 
 import raypyc
 
@@ -111,6 +112,8 @@ class FirstPersonCamera(ctypes.Structure):
 
         # state for window focus
         ('Focused', ctypes.c_bool),
+
+        ('AllowFlight', ctypes.c_bool),
 
         # raylib camera for use with raylib modes
         ('ViewCamera', raypyc.Camera3D),
@@ -245,10 +248,92 @@ def _get_speed_for_axis(camera: ctypes.POINTER(FirstPersonCamera), axis: rlFirst
     return 0.0
 
 
-"""
+def rl_first_person_camera_update(camera: ctypes.POINTER(FirstPersonCamera)) -> None:
+    """update the camera for the current frame"""
+    if not bool(camera):  # NULL pointers have a False boolean value
+        return
+
+    if raypyc.is_window_focused() != camera.contents.Focused and camera.contents.UseMouse:
+        camera.contents.Focused = raypyc.is_window_focused()
+        if camera.contents.Focused:
+            raypyc.disable_cursor()
+        else:
+            raypyc.enable_cursor()
+
+    # Mouse movement detection
+    mouse_position_delta: raypyc.Vector2 = raypyc.get_mouse_delta()
+
+    # Keys input detection
+    direction: ctypes.Array[ctypes.c_float] = (ctypes.c_float * (rlFirstPersonCameraControls.MOVE_DOWN + 1))(
+        _get_speed_for_axis(camera, rlFirstPersonCameraControls.MOVE_FRONT, camera.contents.MoveSpeed.z),
+        _get_speed_for_axis(camera, rlFirstPersonCameraControls.MOVE_BACK, camera.contents.MoveSpeed.z),
+        _get_speed_for_axis(camera, rlFirstPersonCameraControls.MOVE_RIGHT, camera.contents.MoveSpeed.x),
+        _get_speed_for_axis(camera, rlFirstPersonCameraControls.MOVE_LEFT, camera.contents.MoveSpeed.x),
+        _get_speed_for_axis(camera, rlFirstPersonCameraControls.MOVE_UP, camera.contents.MoveSpeed.y),
+        _get_speed_for_axis(camera, rlFirstPersonCameraControls.MOVE_DOWN, camera.contents.MoveSpeed.y)
+    )
+
+    # let someone modify the projected position
+    # Camera orientation calculation
+    turn_rotation: float = _get_speed_for_axis(camera, rlFirstPersonCameraControls.TURN_RIGHT, camera.contents.TurnSpeed.x) - _get_speed_for_axis(camera, rlFirstPersonCameraControls.TURN_LEFT, camera.contents.TurnSpeed.x)
+    tilt_rotation: float = _get_speed_for_axis(camera, rlFirstPersonCameraControls.TURN_UP, camera.contents.TurnSpeed.y) - _get_speed_for_axis(camera, rlFirstPersonCameraControls.TURN_DOWN, camera.contents.TurnSpeed.y)
+
+    if turn_rotation != 0:
+        camera.contents.ViewAngles.x -= turn_rotation * raypyc.DEG2RAD
+    elif camera.contents.UseMouse and camera.contents.Focused:
+        camera.contents.ViewAngles.x += (mouse_position_delta.x / camera.contents.MouseSensitivity)
+
+    if tilt_rotation:
+        camera.contents.ViewAngles.y += tilt_rotation * raypyc.DEG2RAD
+    elif camera.contents.UseMouse and camera.contents.Focused:
+        camera.contents.ViewAngles.y += (mouse_position_delta.y / camera.contents.MouseSensitivity)
+
+    # Angle clamp
+    if camera.contents.ViewAngles.y < camera.contents.MinimumViewY * raypyc.DEG2RAD:
+        camera.contents.ViewAngles.y = camera.contents.MinimumViewY * raypyc.DEG2RAD
+    elif camera.contents.ViewAngles.y > camera.contents.MaximumViewY * raypyc.DEG2RAD:
+        camera.contents.ViewAngles.y = camera.contents.MaximumViewY * raypyc.DEG2RAD
+
+    # Recalculate camera target considering translation and rotation
+    target: raypyc.Vector3 = raypyc.vector3_transform(raypyc.Vector3(0, 0, 1), raypyc.matrix_rotate_zyx(raypyc.Vector3(camera.contents.ViewAngles.y, -camera.contents.ViewAngles.x, 0)))
+
+    if camera.contents.AllowFlight:
+        camera.contents.Forward = target
+    else:
+        camera.contents.Forward = raypyc.vector3_transform(raypyc.Vector3(0, 0, 1), raypyc.matrix_rotate_zyx(raypyc.Vector3(0, -camera.contents.ViewAngles.x, 0)))
+
+    camera.contents.Right = raypyc.Vector3(camera.contents.Forward.z * -1.0, 0, camera.contents.Forward.x)
+
+    camera.contents.CameraPosition = raypyc.vector3_add(camera.contents.CameraPosition, raypyc.vector3_scale(camera.contents.Forward, direction[rlFirstPersonCameraControls.MOVE_FRONT] - direction[rlFirstPersonCameraControls.MOVE_BACK]))
+    camera.contents.CameraPosition = raypyc.vector3_add(camera.contents.CameraPosition, raypyc.vector3_scale(camera.contents.Right, direction[rlFirstPersonCameraControls.MOVE_RIGHT] - direction[rlFirstPersonCameraControls.MOVE_LEFT]))
+
+    camera.contents.ViewCamera.position = camera.contents.CameraPosition
+
+    eye_offset: float = camera.contents.PlayerEyesPosition
+
+    if camera.contents.ViewBobbleFreq > 0:
+        swingDelta: float = float(max(math.fabs(direction[rlFirstPersonCameraControls.MOVE_FRONT] - direction[rlFirstPersonCameraControls.MOVE_BACK]), math.fabs(direction[rlFirstPersonCameraControls.MOVE_RIGHT] - direction[rlFirstPersonCameraControls.MOVE_LEFT])))
+
+        camera.contents.CurrentBobble += swingDelta * camera.contents.ViewBobbleFreq
+
+        viewBobbleDampen: float = 8.0
+
+        eye_offset -= math.sin(camera.contents.CurrentBobble / viewBobbleDampen) * camera.contents.ViewBobbleMagnitude
+
+        camera.contents.ViewCamera.up.x = math.sin(camera.contents.CurrentBobble / (viewBobbleDampen * 2)) * camera.contents.ViewBobbleWaverMagnitude
+        camera.contents.ViewCamera.up.z = -math.sin(camera.contents.CurrentBobble / (viewBobbleDampen * 2)) * camera.contents.ViewBobbleWaverMagnitude
+
+    else:
+        camera.contents.CurrentBobble = 0
+        camera.contents.ViewCamera.up.x = 0
+        camera.contents.ViewCamera.up.z = 0
+
+
+
 # for texting
 raypyc.init_window(60, 60, b"fdsfsdf")
 ff = FirstPersonCamera()
 init_first_person_camera(ctypes.pointer(ff), 60.0, raypyc.Vector3(0, 0, 0))
 print(_get_speed_for_axis(ctypes.pointer(ff), rlFirstPersonCameraControls.SPRINT, 3.0))
-raypyc.close_window()"""
+rl_first_person_camera_update(ctypes.pointer(ff))
+raypyc.close_window()
