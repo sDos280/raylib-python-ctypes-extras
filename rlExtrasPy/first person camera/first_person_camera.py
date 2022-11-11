@@ -100,9 +100,6 @@ class FirstPersonCamera(ctypes.Structure):
         # the field of view in X and Y
         ('FOV', raypyc.Vector2),
 
-        # state for mouse movement
-        ('PreviousMousePosition', raypyc.Vector2),
-
         # state for view movement
         ('TargetDistance', ctypes.c_float),
 
@@ -161,7 +158,6 @@ def rl_first_person_camera_init(camera: ctypes.POINTER(FirstPersonCamera), fov_y
     camera.contents.ViewBobbleWaverMagnitude = 0.002
     camera.contents.CurrentBobble = 0
 
-    camera.contents.PreviousMousePosition = raypyc.get_mouse_position()
     camera.contents.Focused = raypyc.is_window_focused()
 
     camera.contents.TargetDistance = 1
@@ -177,6 +173,8 @@ def rl_first_person_camera_init(camera: ctypes.POINTER(FirstPersonCamera), fov_y
     camera.contents.ViewCamera.up = raypyc.Vector3(0.0, 1.0, 0.0)
     camera.contents.ViewCamera.fov_y = fov_y
     camera.contents.ViewCamera.projection = raypyc.CameraProjection.CAMERA_PERSPECTIVE
+
+    camera.contents.AllowFlight = False
 
     camera.contents.NearPlane = 0.01
     camera.contents.FarPlane = 1000.0
@@ -236,7 +234,6 @@ def _get_speed_for_axis(camera: ctypes.POINTER(FirstPersonCamera), axis: rlFirst
         return
 
     key: int = camera.contents.ControlsKeys[axis]
-
     if key == -1:
         return 0
 
@@ -255,7 +252,7 @@ def rl_first_person_camera_update(camera: ctypes.POINTER(FirstPersonCamera)) -> 
     if not bool(camera):  # NULL pointers have a False boolean value
         return
 
-    if raypyc.is_window_focused() != camera.contents.Focused and camera.contents.UseMouse:
+    if (raypyc.is_window_focused() != camera.contents.Focused) and camera.contents.UseMouse:
         camera.contents.Focused = raypyc.is_window_focused()
         if camera.contents.Focused:
             raypyc.disable_cursor()
@@ -309,15 +306,17 @@ def rl_first_person_camera_update(camera: ctypes.POINTER(FirstPersonCamera)) -> 
     camera.contents.CameraPosition = raypyc.vector3_add(camera.contents.CameraPosition, raypyc.vector3_scale(camera.contents.Forward, direction[rlFirstPersonCameraControls.MOVE_FRONT] - direction[rlFirstPersonCameraControls.MOVE_BACK]))
     camera.contents.CameraPosition = raypyc.vector3_add(camera.contents.CameraPosition, raypyc.vector3_scale(camera.contents.Right, direction[rlFirstPersonCameraControls.MOVE_RIGHT] - direction[rlFirstPersonCameraControls.MOVE_LEFT]))
 
+    camera.contents.CameraPosition.y += direction[rlFirstPersonCameraControls.MOVE_UP] - direction[rlFirstPersonCameraControls.MOVE_DOWN]
+
     camera.contents.ViewCamera.position = camera.contents.CameraPosition
 
     eye_offset: float = camera.contents.PlayerEyesPosition
 
     if camera.contents.ViewBobbleFreq > 0:
-        swingDelta: float = float(max(math.fabs(direction[rlFirstPersonCameraControls.MOVE_FRONT] - direction[rlFirstPersonCameraControls.MOVE_BACK]),
-                                      math.fabs(direction[rlFirstPersonCameraControls.MOVE_RIGHT] - direction[rlFirstPersonCameraControls.MOVE_LEFT])))
+        swing_delta: float = float(max(math.fabs(direction[rlFirstPersonCameraControls.MOVE_FRONT] - direction[rlFirstPersonCameraControls.MOVE_BACK]),
+                                       math.fabs(direction[rlFirstPersonCameraControls.MOVE_RIGHT] - direction[rlFirstPersonCameraControls.MOVE_LEFT])))
 
-        camera.contents.CurrentBobble += swingDelta * camera.contents.ViewBobbleFreq
+        camera.contents.CurrentBobble += swing_delta * camera.contents.ViewBobbleFreq
 
         viewBobbleDampen: float = 8.0
 
@@ -330,6 +329,12 @@ def rl_first_person_camera_update(camera: ctypes.POINTER(FirstPersonCamera)) -> 
         camera.contents.CurrentBobble = 0
         camera.contents.ViewCamera.up.x = 0
         camera.contents.ViewCamera.up.z = 0
+
+    camera.contents.ViewCamera.position.y += eye_offset
+
+    camera.contents.ViewCamera.target.x = camera.contents.ViewCamera.position.x + target.x
+    camera.contents.ViewCamera.target.y = camera.contents.ViewCamera.position.y + target.y
+    camera.contents.ViewCamera.target.z = camera.contents.ViewCamera.position.z + target.z
 
 
 def _setup_camera(camera: ctypes.POINTER(FirstPersonCamera), aspect: ctypes.c_float) -> None:
@@ -359,9 +364,9 @@ def _setup_camera(camera: ctypes.POINTER(FirstPersonCamera), aspect: ctypes.c_fl
     raypyc.rl_load_identity()  # Reset current matrix (model-view)
 
     # Setup Camera view
-    matView: raypyc.Matrix = raypyc.matrix_look_at(camera.contents.ViewCamera.position, camera.contents.ViewCamera.target, camera.contents.ViewCamera.up)
+    mat_view: raypyc.Matrix = raypyc.matrix_look_at(camera.contents.ViewCamera.position, camera.contents.ViewCamera.target, camera.contents.ViewCamera.up)
 
-    raypyc.rl_mult_matrixf(raypyc.matrix_to_float_v(matView).v)  # Multiply model-view matrix by view matrix (camera)
+    raypyc.rl_mult_matrixf(raypyc.matrix_to_float_v(mat_view).v)  # Multiply model-view matrix by view matrix (camera)
 
     raypyc.rl_enable_depth_test()  # Enable DEPTH_TEST for 3D
 
@@ -373,6 +378,7 @@ def rl_first_person_camera_begin_mode_3d(camera: ctypes.POINTER(FirstPersonCamer
 
     aspect: float = float(raypyc.get_screen_width()) / float(raypyc.get_screen_height())
     _setup_camera(camera, aspect)
+
 
 def rl_first_person_camera_end_mode_3d() -> None:
     """end drawing with the camera"""

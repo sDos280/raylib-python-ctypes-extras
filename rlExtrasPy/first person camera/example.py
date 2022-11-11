@@ -25,6 +25,7 @@ def main():
 
     set_config_flags(ConfigFlags.FLAG_MSAA_4X_HINT | ConfigFlags.FLAG_VSYNC_HINT)
     init_window(SCREEN_WIDTH, SCREEN_HEIGHT, b"raylib-extras [camera] example - First person camera")
+    set_target_fps(255)
     # ------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------
@@ -40,8 +41,6 @@ def main():
     cam.MoveSpeed.z = 10
     cam.MoveSpeed.x = 5
 
-    cam.FarPlane = 5000
-
     # Main game loop
     while not window_should_close():  # Detect window close button or ESC key
         # Update
@@ -50,12 +49,13 @@ def main():
             cam.AllowFlight = not cam.AllowFlight
 
         rl_first_person_camera_update(ctypes.pointer(cam))
+
         # ----------------------------------------------------------------------------------
 
         # Draw
         # ----------------------------------------------------------------------------------
         begin_drawing()
-        clear_background(RAYWHITE)
+        clear_background(SKYBLUE)
 
         rl_first_person_camera_begin_mode_3d(ctypes.pointer(cam))
 
@@ -64,20 +64,13 @@ def main():
         spacing = 4.0
         count = 5
 
-        total = 0
-        vis = 0
-
         for x in range(int(-count * spacing), int(count * spacing), int(spacing)):
             for z in range(int(-count * spacing), int(count * spacing), int(spacing)):
-                pos = Vector3(x, 0.5, z)
-
-                minv = Vector3(x - 0.5, 0, z - 0.5)
-                maxv = Vector3(x + 0.5, 1, z + 0.5)
-
-                draw_cube_texture(tx, pos, 1, 1, 1, GREEN)
-                draw_cube_texture(tx, pos, 0.25, 1, 0.25, BROWN)
+                draw_cube_texture(tx, Vector3(x, 1.5, z), 1, 1, 1, GREEN)
+                draw_cube_texture(tx, Vector3(x, 0.5, z), 0.25, 1, 0.25, BROWN)
 
         rl_first_person_camera_end_mode_3d()
+
         draw_text(f"Forward: <{cam.Forward.x}, {cam.Forward.y}, {cam.Forward.z}>".encode(), 50, 50, 20, BLACK)
         draw_text(f"<Pos: {cam.CameraPosition.x}, {cam.CameraPosition.y}, {cam.CameraPosition.z}>".encode(), 50, 80, 20, BLACK)
 
