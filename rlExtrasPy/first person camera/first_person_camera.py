@@ -171,7 +171,7 @@ def rl_first_person_camera_init(camera: ctypes.POINTER(FirstPersonCamera), fov_y
     camera.contents.ViewCamera.position.y += camera.contents.PlayerEyesPosition
     camera.contents.ViewCamera.target = raypyc.vector3_add(camera.contents.ViewCamera.position, raypyc.Vector3(0, 0, camera.contents.TargetDistance))
     camera.contents.ViewCamera.up = raypyc.Vector3(0.0, 1.0, 0.0)
-    camera.contents.ViewCamera.fov_y = fov_y
+    camera.contents.ViewCamera.fovy = fov_y
     camera.contents.ViewCamera.projection = raypyc.CameraProjection.CAMERA_PERSPECTIVE
 
     camera.contents.AllowFlight = False
@@ -344,14 +344,13 @@ def _setup_camera(camera: ctypes.POINTER(FirstPersonCamera), aspect: ctypes.c_fl
     raypyc.rl_load_identity()  # Reset current matrix (projection)
 
     if camera.contents.ViewCamera.projection == raypyc.CameraProjection.CAMERA_PERSPECTIVE:
-
         # Setup perspective projection
         top: float = RL_CULL_DISTANCE_NEAR * math.tan(camera.contents.ViewCamera.fovy * 0.5 * raypyc.DEG2RAD)
         right: float = top * aspect
 
         raypyc.rl_frustum(-right, right, -top, top, camera.contents.NearPlane, camera.contents.FarPlane)
 
-    elif camera.contents.ViewCamera.projection == raypyc.CAMERA_ORTHOGRAPHIC:
+    elif camera.contents.ViewCamera.projection == raypyc.CameraProjection.CAMERA_ORTHOGRAPHIC:
         # Setup orthographic projection
         top: float = camera.contents.ViewCamera.fovy / 2.0
         right: float = top * aspect
