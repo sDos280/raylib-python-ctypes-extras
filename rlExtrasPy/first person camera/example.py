@@ -36,8 +36,8 @@ def main():
     set_texture_wrap(tx, TextureWrap.TEXTURE_WRAP_CLAMP)
 
     # setup initial camera data
-    cam = FirstPersonCamera()
-    rl_first_person_camera_init(ctypes.pointer(cam), 45, Vector3(1, 0, 0))
+    cam = rlFPCamera()
+    rlFPCamera_init(ctypes.pointer(cam), 45, Vector3(1, 0, 0))
     cam.MoveSpeed.z = 10
     cam.MoveSpeed.x = 5
 
@@ -50,7 +50,7 @@ def main():
         if is_key_pressed(KeyboardKey.KEY_F1):
             cam.AllowFlight = not cam.AllowFlight
 
-        rl_first_person_camera_update(ctypes.pointer(cam))
+        rlFPCamera_update(ctypes.pointer(cam))
 
         # ----------------------------------------------------------------------------------
 
@@ -59,7 +59,7 @@ def main():
         begin_drawing()
         clear_background(SKYBLUE)
 
-        rl_first_person_camera_begin_mode_3d(ctypes.pointer(cam))
+        rlFPCamera_begin_mode_3d(ctypes.pointer(cam))
 
         # grid of cube trees on a plane to make a "world"
         draw_plane(Vector3(0, 0, 0), Vector2(50, 50), BEIGE)  # simple world plane
@@ -71,7 +71,7 @@ def main():
                 draw_cube_texture(tx, Vector3(x, 1.5, z), 1, 1, 1, GREEN)
                 draw_cube_texture(tx, Vector3(x, 0.5, z), 0.25, 1, 0.25, BROWN)
 
-        rl_first_person_camera_end_mode_3d()
+        rlFPCamera_end_mode_3d()
 
         if cam.AllowFlight:
             draw_text(b"(F1) Flight", 2, 20, 20, BLACK)
