@@ -10,9 +10,9 @@ rlFPCamera_init(pointer(camera), fov, pos)
 ```
 
 The fov argument is the vertical field of view, 45 degrees is a good starting point. The horizontal view will be computed using the aspect ratio of the screen.
-The position will be the inital location of the camera in world space.
+The position will be the initial location of the camera in world space.
 
-Once the camera is initalized, options in the camera structure can be set, such as view bob, speed, control keys, and render distance.
+Once the camera is initialized, options in the camera structure can be set, such as view bob, speed, control keys, and render distance.
 
 Whenever a window, or render texture is resized rlFPCamera_resize_view needs to be called for any cameras used in that space, to properly recompute the FOV.
 
