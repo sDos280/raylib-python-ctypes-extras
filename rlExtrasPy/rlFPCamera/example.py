@@ -8,7 +8,7 @@ raylib [core] example - First Person Orbit Camera Example
 # ------------------------------------------------------------------------------------
 from raypyc import *
 
-from first_person_camera import *
+from rlFPCamera import *
 
 
 # ------------------------------------------------------------------------------------
