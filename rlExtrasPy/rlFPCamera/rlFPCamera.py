@@ -121,7 +121,7 @@ class rlFPCamera(ctypes.Structure):
         ('Right', raypyc.Vector3),
 
         # clipping planes
-        # note must use begin_mode_fp_3d and end_mode_fp_3d instead of begin_mode_3d/end_mode_3d for clipping planes to work
+        # note must use rlFPCamera_begin_mode_3d and rlFPCamera_end_mode_3d instead of begin_mode_3d/end_mode_3d for clipping planes to work
         ('NearPlane', ctypes.c_double),
         ('FarPlane', ctypes.c_double)
     ]
