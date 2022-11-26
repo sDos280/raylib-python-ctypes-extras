@@ -34,8 +34,6 @@ import math
 
 import raypyc
 
-RL_CULL_DISTANCE_NEAR: float = 0.01  # Default projection matrix near cull distance  (currently raypyc don't wrap config.h)
-
 
 class rlFPCameraControls(enum.IntEnum):
     MOVE_FRONT = 0
@@ -345,7 +343,7 @@ def _setup_camera(camera: ctypes.POINTER(rlFPCamera), aspect: ctypes.c_float) ->
 
     if camera.contents.ViewCamera.projection == raypyc.CameraProjection.CAMERA_PERSPECTIVE:
         # Setup perspective projection
-        top: float = RL_CULL_DISTANCE_NEAR * math.tan(camera.contents.ViewCamera.fovy * 0.5 * raypyc.DEG2RAD)
+        top: float = raypyc.RL_CULL_DISTANCE_NEAR * math.tan(camera.contents.ViewCamera.fovy * 0.5 * raypyc.DEG2RAD)
         right: float = top * aspect
 
         raypyc.rl_frustum(-right, right, -top, top, camera.contents.NearPlane, camera.contents.FarPlane)
